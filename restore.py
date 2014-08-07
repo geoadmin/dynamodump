@@ -7,10 +7,11 @@ import json
 import sys
 import os
 import time
+import zipfile
 #from multiprocessing import Pool
 
 
-DUMP_DIR = '/var/cache/print/' + sys.argv[1] + '/'
+DUMP_DIR = '/var/cache/print/' + sys.argv[1]
 ## Change back to shorturls!!!!!
 TABLE_NAME = 'test'
 JSON_INDENT = 2
@@ -25,11 +26,22 @@ if TABLE_NAME in conn.list_tables():
 
 def open_file_data(file_name):
     try:
-        file_data = open(DUMP_DIR + file_name, 'r')
+        file_data = open(DUMP_DIR + '/' + file_name, 'r')
     except IOError:
         print 'The following dump directory doesn\'t exists: %s' %DUMP_DIR
         sys.exit()
     return file_data
+
+# Extract zipfile
+try:
+    os.mkdir(DUMP_DIR)
+except OSError as e:
+    print e
+    sys.exit()
+fh = open(DUMP_DIR + '.zip', 'rb')
+zipf = zipfile.ZipFile(fh)
+zipf.extractall(DUMP_DIR)
+fh.close()
 
 # Get data files
 files_names = os.listdir(DUMP_DIR)
@@ -65,7 +77,6 @@ def process_batch_list(conn, batch_list):
         # print something if dict is not empty
         print response['UnprocessedItems']
 
-
 def write_data(file_name):
     file_data = open_file_data(file_name)
     try:
@@ -78,7 +89,7 @@ def write_data(file_name):
         print 'An error occured during DB restoration'
         print '%s' %e
         file_data.close()
-        break
+        sys.exit()
     finally:
         file_data.close()
 
@@ -89,7 +100,7 @@ def write_data(file_name):
 time.sleep(15)
 map(write_data, files_names)
 table.update_throughput(25, 25)
-
+os.removedirs(DUMP_DIR + '.zip')
 
 tf = time.time()
 toff = tf - t0
