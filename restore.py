@@ -8,12 +8,12 @@ import sys
 import os
 import time
 import zipfile
+import shutil
 #from multiprocessing import Pool
 
 
 DUMP_DIR = '/var/cache/print/' + sys.argv[1]
-## Change back to shorturls!!!!!
-TABLE_NAME = 'test'
+TABLE_NAME = 'shorturls'
 JSON_INDENT = 2
 
 t0 = time.time()
@@ -26,10 +26,11 @@ if TABLE_NAME in conn.list_tables():
 
 def open_file_data(file_name):
     try:
-        file_data = open(DUMP_DIR + '/' + file_name, 'r')
-    except IOError:
-        print 'The following dump directory doesn\'t exists: %s' %DUMP_DIR
-        sys.exit()
+        path_data = DUMP_DIR + '/' + file_name
+        file_data = open(path_data, 'r')
+    except IOError as e:
+        print 'The following path doesn\'t exists: %s' %path_data
+        raise e
     return file_data
 
 # Extract zipfile
@@ -78,30 +79,31 @@ def process_batch_list(conn, batch_list):
         print response['UnprocessedItems']
 
 def write_data(file_name):
-    file_data = open_file_data(file_name)
     try:
+        file_data = open_file_data(file_name)
         data = json.load(file_data)
         # Load data as batches of 25 items (maximum value) and should not exceed 1Mb
         for chunk in split_data(data, 25):
             for batch_list in create_batch_lists(conn, table, chunk):
                 process_batch_list(conn, batch_list)
     except Exception as e:
-        print 'An error occured during DB restoration'
-        print '%s' %e
-        file_data.close()
-        sys.exit()
+        raise e
     finally:
         file_data.close()
 
 ##pool = Pool(processes=len(files_names))
 ##pool.map(write_data, files_names)
 
-## Wait 15 secs for the table to create
-time.sleep(15)
-map(write_data, files_names)
-table.update_throughput(25, 25)
-os.removedirs(DUMP_DIR + '.zip')
-
-tf = time.time()
-toff = tf - t0
-print 'It took %s seconds' %toff
+## Wait 20 secs for the table to create
+time.sleep(20)
+try:
+    map(write_data, files_names)
+except Exception as e:
+    print 'An error occured during DB restoration'
+    print '%s' %e
+finally:
+    table.update_throughput(25, 25)
+    shutil.rmtree(DUMP_DIR)
+    tf = time.time()
+    toff = tf - t0
+    print 'It took %s seconds' %toff

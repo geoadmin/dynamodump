@@ -9,6 +9,7 @@ import time
 import datetime
 import os 
 import zipfile
+import shutil
 
 
 t0 = time.time()
@@ -62,8 +63,9 @@ try:
             f.close()
             file_count += 1
             filename = PREFIX_NAME + str(file_count) + '.json'
-            f = open(DUMP_DIR + FOLDER_NAME + '/' + filename, 'w+')
-            f.write('[')
+            if counter != nb_items:
+                f = open(DUMP_DIR + FOLDER_NAME + '/' + filename, 'w+')
+                f.write('[')
         else:
             f.write(',')
 except Exception as e:
@@ -73,7 +75,7 @@ finally:
     f.close()
 
 zip_dir(FOLDER_NAME + '.zip', DUMP_DIR + FOLDER_NAME, DUMP_DIR)
-os.removedirs(DUMP_DIR + FOLDER_NAME)
+shutil.rmtree(DUMP_DIR + FOLDER_NAME)
 tf = time.time()
 toff = tf - t0
 print 'It took %s seconds' %toff
