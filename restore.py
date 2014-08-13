@@ -44,8 +44,8 @@ def create_batch_lists(conn, table, chunk):
 def process_batch_list(conn, batch_list):
     response = conn.batch_write_item(batch_list)
     if response['UnprocessedItems']:
-        # print something if dict is not empty
-        print response['UnprocessedItems']
+        logger.error(str(response['UnprocessedItems']))
+        raise 'Unprocessed items, increase write capacity'
 
 def write_data(file_name):
     try:
@@ -112,6 +112,7 @@ if __name__ == '__main__':
         ## Wait 25 secs for the table to create
         time.sleep(25)
         # If fast restore is necessary increase write unit to 20000 and use:
+        # Don't forget to make sure write units are back to normal after the restore (e.g. 25)
         # pool = Pool(processes=len(files_names))
         # pool.map(write_data, files_names)
         map(write_data, files_names)

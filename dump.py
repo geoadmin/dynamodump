@@ -14,6 +14,7 @@ from log import create_dynamo_logger
 
 
 def save_schema():
+    f = None
     try:
         f = open(DUMP_DIR + FOLDER_NAME + '/schema.json', 'w+')
         f.write(json.dumps(table_desc, indent=JSON_INDENT))
@@ -21,13 +22,31 @@ def save_schema():
         logger.error('An error occured while saving the schema')
         raise e
     finally:
-        f.close()
+        if f:
+            f.close()
 
 def save_data():
+    table = None
+    f = None
     counter = 0
     try:
         table = conn.get_table('shorturls')
-        table.update_throughput(500, 25)
+        table.update_throughput(50, 25)
+        maxAttempts = 6
+        attempts = 0
+        # Wait until throughtput is updated
+        while True:
+            try:
+                scanned_table = table.scan()
+                break
+            except Exception as e:
+                logger.info('Trying to scan the table...')
+                time.sleep(5)
+                attempt += 1
+                if attempts == maxAttempts:
+                    logger.error('Unable to scan the table')
+                    logger.error(e)
+                    raise e
         scanned_table = table.scan()
 
         # Don't write more than 100'000 items per file
@@ -54,8 +73,10 @@ def save_data():
         logger.error('An error occured while writing the json files')
         raise e
     finally:
-        table.update_throughput(25, 25)
-        f.close()
+        if table:
+            table.update_throughput(25, 25)
+        if f:
+            f.close()
 
 def zip_dir(zipname, dir_to_zip, dump_dir):
     try:
