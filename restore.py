@@ -9,20 +9,9 @@ import os
 import time
 import zipfile
 import shutil
+from log import create_dynamo_logger
 #from multiprocessing import Pool
 
-
-DUMP_DIR = '/var/cache/print/' + sys.argv[1]
-TABLE_NAME = 'shorturls'
-JSON_INDENT = 2
-
-t0 = time.time()
-# Get Schema
-conn = boto.connect_dynamodb()
-
-if TABLE_NAME in conn.list_tables():
-    print 'Table %s already exists, please make sure you want need to restore it.' %TABLE_NAME
-    sys.exit()
 
 def open_file_data(file_name):
     try:
@@ -32,26 +21,6 @@ def open_file_data(file_name):
         print 'The following path doesn\'t exists: %s' %path_data
         raise e
     return file_data
-
-# Extract zipfile
-try:
-    os.mkdir(DUMP_DIR)
-except OSError as e:
-    print e
-    sys.exit()
-fh = open(DUMP_DIR + '.zip', 'rb')
-zipf = zipfile.ZipFile(fh)
-zipf.extractall(DUMP_DIR)
-fh.close()
-
-# Get data files
-files_names = os.listdir(DUMP_DIR)
-filter_data_files = lambda x: x.startswith('data_')
-files_names = filter(filter_data_files, files_names)
-
-# Recreate the table
-schema = conn.create_schema(hash_key_name='url_short',hash_key_proto_value='S')
-table = conn.create_table(name=TABLE_NAME, schema=schema, read_units=25, write_units=500)
 
 def split_data(data, n):
     # data is a list of object litterals
@@ -91,19 +60,68 @@ def write_data(file_name):
     finally:
         file_data.close()
 
-##pool = Pool(processes=len(files_names))
-##pool.map(write_data, files_names)
 
-## Wait 20 secs for the table to create
-time.sleep(20)
-try:
-    map(write_data, files_names)
-except Exception as e:
-    print 'An error occured during DB restoration'
-    print '%s' %e
-finally:
-    table.update_throughput(25, 25)
-    shutil.rmtree(DUMP_DIR)
-    tf = time.time()
-    toff = tf - t0
-    print 'It took %s seconds' %toff
+if __name__ == '__main__':
+    DUMP_DIR = '/var/backups/dynamodb/' + sys.argv[1]
+    TABLE_NAME = 'shorturls'
+    JSON_INDENT = 2
+
+    t0 = time.time()
+
+    logger = create_dynamo_logger('restore')
+
+    try:
+        conn = boto.connect_dynamodb()
+    except Exception as e:
+        logger.error('An error occured during DB connection')
+        logger.error(e)
+        sys.exit(1)
+
+    if TABLE_NAME in conn.list_tables():
+        logger.error('Table %s already exists, please make sure you want need to restore it.' %TABLE_NAME)
+        sys.exit(1)
+
+    # Extract zipfile
+    try:
+        os.mkdir(DUMP_DIR)
+    except OSError as e:
+        logger.error('Can\'t create dump directory %s' %DUMP_DIR)
+        logger.error(e)
+        sys.exit(1)
+    try:
+        fh = open(DUMP_DIR + '.zip', 'rb')
+        zipf = zipfile.ZipFile(fh)
+        zipf.extractall(DUMP_DIR)
+        fh.close()
+    except Exception as e:
+        logger.error('Can\'t extract file from %s.zip' %DUMP_DIR)
+        logger.error(e)
+        sys.exit(1)
+
+    # Get data files
+    files_names = os.listdir(DUMP_DIR)
+    filter_data_files = lambda x: x.startswith('data_')
+    files_names = filter(filter_data_files, files_names)
+
+    # Recreate the table
+    schema = conn.create_schema(hash_key_name='url_short',hash_key_proto_value='S')
+    table = conn.create_table(name=TABLE_NAME, schema=schema, read_units=25, write_units=500)
+
+    ## Wait 25 secs for the table to create
+    time.sleep(25)
+    try:
+        # If fast restore is necessary increase write unit to 20000 and use:
+        # pool = Pool(processes=len(files_names))
+        # pool.map(write_data, files_names)
+        map(write_data, files_names)
+    except Exception as e:
+        logger.error('An error occured during DB restoration')
+        logger.error(e)
+        sys.exit(1)
+    finally:
+        if table:
+            table.update_throughput(25, 25)
+        shutil.rmtree(DUMP_DIR)
+        tf = time.time()
+        toff = tf - t0
+        logger.info('It took: %s seconds' %toff)
