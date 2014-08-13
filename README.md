@@ -6,6 +6,18 @@ INSTALL
 </pre>
 
 
+CONFIGURATION
+-------------
+
+Logs:
+
+    /var/log/dynamodb/
+
+Backups:
+
+    /var/backups/dynamodb/
+
+
 DUMP DB USAGE
 -------------
 
@@ -13,7 +25,7 @@ DUMP DB USAGE
 venv/bin/python dump.py
 </pre>
 
-will create a folder which name is today's timestamp. (DDMMYYYY so for instance 05082014)
+will create a folder which name is today's timestamp. (YYYYMMDD so for instance 20140805)
 This folder contains 2 types of files:
 
 schema.json : The description of the table
