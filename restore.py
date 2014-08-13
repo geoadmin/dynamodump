@@ -103,13 +103,14 @@ if __name__ == '__main__':
     filter_data_files = lambda x: x.startswith('data_')
     files_names = filter(filter_data_files, files_names)
 
-    # Recreate the table
-    schema = conn.create_schema(hash_key_name='url_short',hash_key_proto_value='S')
-    table = conn.create_table(name=TABLE_NAME, schema=schema, read_units=25, write_units=500)
-
-    ## Wait 25 secs for the table to create
-    time.sleep(25)
+    table = None
     try:
+        # Recreate the table
+        schema = conn.create_schema(hash_key_name='url_short',hash_key_proto_value='S')
+        table = conn.create_table(name=TABLE_NAME, schema=schema, read_units=25, write_units=500)
+
+        ## Wait 25 secs for the table to create
+        time.sleep(25)
         # If fast restore is necessary increase write unit to 20000 and use:
         # pool = Pool(processes=len(files_names))
         # pool.map(write_data, files_names)
