@@ -91,6 +91,21 @@ def zip_dir(zipname, dir_to_zip, dump_dir):
         logger.error('An error occured while zipping the directory')
         raise e
 
+def manage_retention(dumpDir):
+    # A maximum a 30 dumps
+    MAX_RENTENTION = 30
+    try:
+        dumps = os.listdir(dumpDir)
+        dumps.sort()
+    except OSError as e:
+        logger.error('Dump directory %s doesn\'t exit' %dumpDir)
+
+    if len(dumps) > 0:
+        cleandumps = lambda x: shutil.rmtree(dumpDir + x)
+        if dumps[len(dumps) - 1].startswith('lost'):
+            dumps.pop(len(dumps) - 1)
+        map(cleandumps, dumps[0:len(dumps) - MAX_RENTENTION])
+
 if __name__ == '__main__':
     t0 = time.time()
     DUMP_DIR = '/var/backups/dynamodb/'
@@ -131,6 +146,8 @@ if __name__ == '__main__':
         logger.error('It took: %s seconds' %toff)
         logger.error('DUMP_STATUS=1')
         sys.exit(1)
+
+    manage_retention(DUMP_DIR)
 
     tf = time.time()
     toff = tf - t0
