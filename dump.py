@@ -41,7 +41,7 @@ def save_data():
                 break
             except Exception as e:
                 logger.info('Trying to scan the table...')
-                time.sleep(5)
+                time.sleep(20)
                 attempt += 1
                 if attempts == maxAttempts:
                     logger.error('Unable to scan the table')
