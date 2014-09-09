@@ -107,7 +107,7 @@ if __name__ == '__main__':
     try:
         # Recreate the table
         schema = conn.create_schema(hash_key_name='url_short',hash_key_proto_value='S')
-        table = conn.create_table(name=TABLE_NAME, schema=schema, read_units=25, write_units=500)
+        table = conn.create_table(name=TABLE_NAME, schema=schema, read_units=15, write_units=30)
 
         ## Wait 25 secs for the table to create
         time.sleep(25)
@@ -122,7 +122,7 @@ if __name__ == '__main__':
         sys.exit(1)
     finally:
         if table:
-            table.update_throughput(25, 25)
+            table.update_throughput(15, 15)
         shutil.rmtree(DUMP_DIR)
         tf = time.time()
         toff = tf - t0
