@@ -18,6 +18,7 @@ def save_schema():
     try:
         f = open(DUMP_DIR + FOLDER_NAME + '/schema.json', 'w+')
         f.write(json.dumps(table_desc, indent=JSON_INDENT))
+        logger.info('schema.json has been created')
     except Exception as e:
         logger.error('An error occured while saving the schema')
         raise e
@@ -47,6 +48,7 @@ def save_data():
                     logger.error('Unable to scan the table')
                     logger.error(e)
                     raise e
+
         scanned_table = table.scan()
 
         # Don't write more than 100'000 items per file
@@ -69,6 +71,8 @@ def save_data():
                     f.write('[')
             else:
                 f.write(',')
+
+        logger.info('All entries have been saved')
     except Exception as e:
         logger.error('An error occured while writing the json files')
         raise e
@@ -98,13 +102,16 @@ def manage_retention(dumpDir):
         dumps = os.listdir(dumpDir)
         dumps.sort()
     except OSError as e:
-        logger.error('Dump directory %s doesn\'t exit' %dumpDir)
+        raise e
 
     if len(dumps) > 0:
-        cleandumps = lambda x: shutil.rmtree(dumpDir + x)
+        cleandumps = lambda x: os.remove(dumpDir + x)
+        # Remove lost and founds
         if dumps[len(dumps) - 1].startswith('lost'):
             dumps.pop(len(dumps) - 1)
-        map(cleandumps, dumps[0:len(dumps) - MAX_RENTENTION])
+        files2Remove = len(dumps) - MAX_RENTENTION
+        if files2Remove > 0:
+            map(cleandumps, dumps[0:files2Remove])
 
 if __name__ == '__main__':
     t0 = time.time()
@@ -139,6 +146,7 @@ if __name__ == '__main__':
         save_data()
         zip_dir(FOLDER_NAME + '.zip', DUMP_DIR + FOLDER_NAME, DUMP_DIR)
         shutil.rmtree(DUMP_DIR + FOLDER_NAME)
+        manage_retention(DUMP_DIR)
     except Exception as e:
         tf = time.time()
         toff = tf - t0
@@ -146,8 +154,6 @@ if __name__ == '__main__':
         logger.error('It took: %s seconds' %toff)
         logger.error('DUMP_STATUS=1')
         sys.exit(1)
-
-    manage_retention(DUMP_DIR)
 
     tf = time.time()
     toff = tf - t0
