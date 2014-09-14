@@ -2,7 +2,8 @@
 
 ## USAGE: venv/bin/python restore.py {timestamp}
 
-import boto
+from boto.dynamodb2.table import Table
+from boto.dynamodb2.fields import HashKey, GlobalKeysOnlyIndex
 import json
 import sys
 import os
@@ -10,7 +11,6 @@ import time
 import zipfile
 import shutil
 from log import create_dynamo_logger
-#from multiprocessing import Pool
 
 
 def open_file_data(file_name):
@@ -27,25 +27,19 @@ def split_data(data, n):
     for i in xrange(0, len(data), n):
         yield data[i:i+n]
 
-def create_batch_lists(conn, table, chunk):
-    batch_items = []
-    batch_list = conn.new_batch_write_list()
-    for row in chunk:
-        dynamo_row = table.new_item(
-            hash_key = row['url_short'],
-            attrs = {
-                'url': row['url'],
-                'timestamp': row['timestamp']
-            })
-        batch_items.append(dynamo_row)
-    batch_list.add_batch(table, batch_items)
-    yield batch_list
-
-def process_batch_list(conn, batch_list):
-    response = conn.batch_write_item(batch_list)
-    if response['UnprocessedItems']:
-        logger.error(str(response['UnprocessedItems']))
-        raise 'Unprocessed items, increase write capacity'
+def create_batch_lists(table, chunk):
+    try:
+        with table.batch_write() as batch_list:
+            for row in chunk:
+                if len(row['url']) <= 2046:
+                    batch_list.put_item(data={
+                        'url_short':  row['url_short'],
+                        'url':  row['url'],
+                        'timestamp': row['timestamp']
+                    })
+    except Exception as e:
+        print e
+        raise e
 
 def write_data(file_name):
     try:
@@ -53,9 +47,9 @@ def write_data(file_name):
         data = json.load(file_data)
         # Load data as batches of 25 items (maximum value) and should not exceed 1Mb
         for chunk in split_data(data, 25):
-            for batch_list in create_batch_lists(conn, table, chunk):
-                process_batch_list(conn, batch_list)
+            create_batch_lists(table, chunk)
     except Exception as e:
+        print e
         raise e
     finally:
         file_data.close()
@@ -63,28 +57,18 @@ def write_data(file_name):
 
 if __name__ == '__main__':
     DUMP_DIR = '/var/backups/dynamodb/' + sys.argv[1]
-    TABLE_NAME = 'shorturls'
+    TABLE_NAME = 'short_urls'
     JSON_INDENT = 2
 
     t0 = time.time()
 
     logger = create_dynamo_logger('restore')
 
-    try:
-        conn = boto.connect_dynamodb()
-    except Exception as e:
-        logger.error('An error occured during DB connection')
-        logger.error(e)
-        sys.exit(1)
-
-    if TABLE_NAME in conn.list_tables():
-        logger.error('Table %s already exists, please make sure you want need to restore it.' %TABLE_NAME)
-        sys.exit(1)
-
     # Extract zipfile
     try:
         os.mkdir(DUMP_DIR)
     except OSError as e:
+        print e
         logger.error('Can\'t create dump directory %s' %DUMP_DIR)
         logger.error(e)
         sys.exit(1)
@@ -94,6 +78,7 @@ if __name__ == '__main__':
         zipf.extractall(DUMP_DIR)
         fh.close()
     except Exception as e:
+        print e
         logger.error('Can\'t extract file from %s.zip' %DUMP_DIR)
         logger.error(e)
         sys.exit(1)
@@ -106,23 +91,30 @@ if __name__ == '__main__':
     table = None
     try:
         # Recreate the table
-        schema = conn.create_schema(hash_key_name='url_short',hash_key_proto_value='S')
-        table = conn.create_table(name=TABLE_NAME, schema=schema, read_units=15, write_units=30)
+        table = Table.create(TABLE_NAME, schema=[
+            HashKey('url_short'),
+        ], throughput={
+            'read': 15,
+            'write': 20
+        },
+        global_indexes=[
+            GlobalKeysOnlyIndex('UrlIndex', parts=[
+                HashKey('url')
+            ], throughput={
+                'read': 15,
+                'write': 20
+            })
+        ])
 
-        ## Wait 25 secs for the table to create
-        time.sleep(25)
-        # If fast restore is necessary increase write unit to 20000 and use:
-        # Don't forget to make sure write units are back to normal after the restore (e.g. 25)
-        # pool = Pool(processes=len(files_names))
-        # pool.map(write_data, files_names)
+        ## Wait 30 secs for the table to create
+        time.sleep(30)
         map(write_data, files_names)
     except Exception as e:
+        print e
         logger.error('An error occured during DB restoration')
         logger.error(e)
         sys.exit(1)
     finally:
-        if table:
-            table.update_throughput(15, 15)
         shutil.rmtree(DUMP_DIR)
         tf = time.time()
         toff = tf - t0
