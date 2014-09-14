@@ -37,3 +37,18 @@ RESTORE DB USAGE
 <pre>
 venv/bin/python restore.py {timestamp}
 </pre>
+
+In order to commit in this repository
+-------------------------------------
+
+    sudo su dynamodb
+    cd
+    cd dynamodump
+
+Change git variables
+--------------------
+
+    git config --global user.email "you@example.com"
+    git config --global user.name "Your Name"
+
+Now you're ready!
