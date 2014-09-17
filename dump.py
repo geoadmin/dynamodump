@@ -31,8 +31,8 @@ def save_data():
     f = None
     counter = 0
     try:
-        table = conn.get_table('shorturls')
-        table.update_throughput(50, 25)
+        table = conn.get_table(TABLE_NAME)
+        table.update_throughput(36, 18)
         maxAttempts = 6
         attempts = 0
         # Wait until throughtput is updated
@@ -78,7 +78,7 @@ def save_data():
         raise e
     finally:
         if table:
-            table.update_throughput(25, 25)
+            table.update_throughput(18, 18)
         if f:
             f.close()
 
@@ -117,7 +117,7 @@ if __name__ == '__main__':
     t0 = time.time()
     DUMP_DIR = '/var/backups/dynamodb/'
     PREFIX_NAME = 'data_'
-    TABLE_NAME = 'shorturls'
+    TABLE_NAME = 'short_urls'
     JSON_INDENT = 2
     FOLDER_NAME = datetime.datetime.fromtimestamp(t0).strftime('%Y%m%d')
 
