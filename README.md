@@ -21,9 +21,7 @@ Backups:
 DUMP DB USAGE
 -------------
 
-<pre>
-venv/bin/python dump.py
-</pre>
+  venv/bin/python dump.py
 
 will create a folder which name is today's timestamp. (YYYYMMDD so for instance 20140805)
 This folder contains 2 types of files:
@@ -34,9 +32,15 @@ data_{n}.json: The actual data represented as an array of object litterals
 RESTORE DB USAGE
 ----------------
 
-<pre>
-venv/bin/python restore.py {timestamp}
-</pre>
+    venv/bin/python restore.py {timestamp} {createtable} {restorefromtimestamp}
+
+Example:
+
+    venv/bin/python restore.py 20140918 true 20140917
+
+{timestamp} format: %Y%m%d (the associated compressed dump timestamp)
+{createtable} values: true or false
+{restorefromtimestamp} format: %Y%m%d
 
 In order to commit in this repository
 -------------------------------------
