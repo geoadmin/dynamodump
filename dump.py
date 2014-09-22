@@ -32,7 +32,9 @@ def save_data():
     counter = 0
     try:
         table = conn.get_table(TABLE_NAME)
-        table.update_throughput(36, 18)
+        if table.read_units != 36:
+            print 'Updating throughput'
+            table.update_throughput(36, 18)
         maxAttempts = 6
         attempts = 0
         # Wait until throughtput is updated
@@ -58,26 +60,32 @@ def save_data():
 
         # Needs to be a list for json.loads to work properly
         f.write('[')
+        print 'Start dump'
         for col in scanned_table:
             json.dump(col, f, indent=JSON_INDENT)
             counter += 1
-            if counter%100000 == 0 or counter == nb_items:
+            if counter%100000 == 0:
                 f.write(']')
                 f.close()
                 file_count += 1
                 filename = PREFIX_NAME + str(file_count) + '.json'
-                if counter != nb_items:
-                    f = open(DUMP_DIR + FOLDER_NAME + '/' + filename, 'w+')
-                    f.write('[')
+                f = open(DUMP_DIR + FOLDER_NAME + '/' + filename, 'w+')
+                f.write('[')
             else:
                 f.write(',')
 
+        # Remove last comma
+        f.seek(-1, os.SEEK_END)
+        f.truncate()
+        f.write(']')
+        f.close()
         logger.info('All entries have been saved')
     except Exception as e:
         logger.error('An error occured while writing the json files')
         raise e
     finally:
-        if table:
+        if table and table.read_units != 18:
+            print 'Back to initial throughput'
             table.update_throughput(18, 18)
         if f:
             f.close()
@@ -128,6 +136,7 @@ if __name__ == '__main__':
     try:
         os.mkdir(DUMP_DIR + FOLDER_NAME)
     except OSError as e:
+        print 'Error during dump creation: %s' %e
         logger.info(e)
         logger.info('Removing directory...')
         shutil.rmtree(DUMP_DIR + FOLDER_NAME)
@@ -135,13 +144,13 @@ if __name__ == '__main__':
     try:
         conn = boto.connect_dynamodb()
     except Exception as e:
+        print 'Error during dump creation: %s' %e
         logger.error(e)
         logger.error('DUMP_STATUS=1')
         sys.exit(1)
 
     try:
         table_desc = conn.describe_table(TABLE_NAME)
-        nb_items = table_desc['Table']['ItemCount']
         save_schema()
         save_data()
         zip_dir(FOLDER_NAME + '.zip', DUMP_DIR + FOLDER_NAME, DUMP_DIR)
@@ -150,6 +159,7 @@ if __name__ == '__main__':
     except Exception as e:
         tf = time.time()
         toff = tf - t0
+        print 'Error during dump creation: %s' %e
         logger.error(e)
         logger.error('It took: %s seconds' %toff)
         logger.error('DUMP_STATUS=1')
@@ -157,5 +167,6 @@ if __name__ == '__main__':
 
     tf = time.time()
     toff = tf - t0
-    logger.info('It took: %s seconds' %toff)
+    print 'Success! It took %s seconds' %toff
+    logger.info('Success! It took: %s seconds' %toff)
     logger.info('DUMP_STATUS=0')
