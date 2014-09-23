@@ -38,9 +38,10 @@ Example:
 
     venv/bin/python restore.py 20140918 true 20140917
 
-{timestamp} format: %Y%m%d (the associated compressed dump timestamp)
-{createtable} values: true or false
-{restorefromtimestamp} format: %Y%m%d
+
+    {timestamp} format: %Y%m%d (the associated compressed dump timestamp)
+    {createtable} values: true or false
+    {restorefromtimestamp} format: %Y%m%d
 
 In order to commit in this repository
 -------------------------------------
@@ -56,3 +57,23 @@ Change git variables
     git config --global user.name "Your Name"
 
 Now you're ready!
+
+Update table indices throughput using boto
+------------------------------------------
+
+<pre>
+from boto.dynamodb2.table import Table
+from boto.dynamodb2 import connect_to_region
+
+
+table = Table('shorturl', connection=connect_to_region('eu-west-1'))
+table.update(throughput={
+    'read': 18,
+    'write': 18
+},  global_indexes={
+    'UrlIndex': {
+         'read': 18,
+         'write': 18
+    }
+})
+</pre>
