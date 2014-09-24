@@ -32,9 +32,9 @@ def save_data():
     counter = 0
     try:
         table = conn.get_table(TABLE_NAME)
-        if table.read_units != 36:
+        if table.read_units != 20:
             print 'Updating throughput'
-            table.update_throughput(36, 18)
+            table.update_throughput(20, 5)
         maxAttempts = 6
         attempts = 0
         # Wait until throughtput is updated
@@ -84,9 +84,9 @@ def save_data():
         logger.error('An error occured while writing the json files')
         raise e
     finally:
-        if table and table.read_units != 18:
+        if table and table.read_units != 10:
             print 'Back to initial throughput'
-            table.update_throughput(18, 18)
+            table.update_throughput(10, 5)
         if f:
             f.close()
 
