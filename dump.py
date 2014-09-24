@@ -2,7 +2,7 @@
 
 ## USAGE: venv/bin/python dump.py
 
-import boto
+from boto.dynamodb import connect_to_region
 import json
 import time
 import datetime
@@ -125,7 +125,7 @@ if __name__ == '__main__':
     t0 = time.time()
     DUMP_DIR = '/var/backups/dynamodb/'
     PREFIX_NAME = 'data_'
-    TABLE_NAME = 'short_urls'
+    TABLE_NAME = 'shorturl'
     JSON_INDENT = 2
     FOLDER_NAME = datetime.datetime.fromtimestamp(t0).strftime('%Y%m%d')
 
@@ -142,7 +142,7 @@ if __name__ == '__main__':
         shutil.rmtree(DUMP_DIR + FOLDER_NAME)
 
     try:
-        conn = boto.connect_dynamodb()
+        conn = connect_to_region(region_name='eu-west-1')
     except Exception as e:
         print 'Error during dump creation: %s' %e
         logger.error(e)
