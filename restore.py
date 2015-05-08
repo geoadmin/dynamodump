@@ -11,7 +11,13 @@ import os
 import time
 import zipfile
 import shutil
+import getopt
 from log import create_dynamo_logger
+
+TIMESTAMP = None
+TABLE_NAME = 'shorturl'
+CREATE_TABLE = False
+JSON_INDENT = 2
 
 
 def open_file_data(file_name):
@@ -57,28 +63,44 @@ def write_data(file_name):
     finally:
         file_data.close()
 
+def usage():
+    print "Restore a dumped dynamoBD to the given 'table' in 'eu-west-1'"
+    print ""
+    print "Usage: restore.py [-h --help] [-t --table=table_name] [-c --create] [-f --filter=20140805] table_name"
 
-if __name__ == '__main__':
-    DUMP_DIR = '/var/backups/dynamodb/' + sys.argv[1]
-    # Determine whether we should create the table
-    if len(sys.argv) > 2:
-        CREATE_TABLE = True if sys.argv[2].lower() == 'true' else False
-    else:
-        CREATE_TABLE = False
-
-    # Should we filter using a timestamp
-    if len(sys.argv) > 3:
-        TIMESTAMP = sys.argv[3]
-        if not TIMESTAMP.isdigit() and not len(TIMESTAMP) != 8:
-            print 'Wrong parameter for timestamp: YYYYMMDD so for instance 20140805'
-            logger.error('Wrong parameter for timestamp: YYYYMMDD so for instance 20140805')
-            sys.exit(1)
-        TIMESTAMP = time.strptime(TIMESTAMP, '%Y%m%d')
-    else:
-        TIMESTAMP = None
-
+def main(argv):
     TABLE_NAME = 'shorturl'
-    JSON_INDENT = 2
+
+    try:
+        opts, args = getopt.getopt(argv, "hct:f:", ["help", "create", "table=", "filter="])
+    except getopt.GetoptError:
+        usage()
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt in ("-h", "--help"):
+            usage()
+            sys.exit()
+        elif opt in ("-t", "--table"):
+            TABLE_NAME = arg
+        elif opt in ("-c", "--create"):
+            CREATE_TABLE = False
+        elif opt in ("-f", "--filter"):
+            TIMESTAMP = arg
+            if not TIMESTAMP.isdigit() and not len(TIMESTAMP) != 8:
+                print 'Wrong parameter for timestamp: YYYYMMDD so for instance 20140805'
+                logger.error('Wrong parameter for timestamp: YYYYMMDD so for instance 20140805')
+                usage()
+                sys.exit(2)
+            TIMESTAMP = time.strptime(TIMESTAMP, '%Y%m%d')
+
+    dirs = "".join(args)
+    DUMP_DIR = os.path.join('/var/backups/dynamodb/', dirs)
+
+
+    restore(TABLE_NAME, DUMP_DIR)
+
+def restore(TABLE_NAME, DUMP_DIR):
+
 
     t0 = time.time()
     logger = create_dynamo_logger('restore')
@@ -115,8 +137,8 @@ if __name__ == '__main__':
 
     table = None
     try:
-        if CREATE_TABLE:
-            print 'Recreating table...'
+        if CREATE_TABLE and TABLE_NAME == 'shorturl':
+            print 'Recreating table %s...' % TABLE_NAME
             # Increase write capacity for faster restore
             table = Table.create(TABLE_NAME, schema=[
                 HashKey('url_short'),
@@ -135,8 +157,22 @@ if __name__ == '__main__':
             )
             ## Wait 30 secs for the table to create
             time.sleep(30)
+        elif CREATE_TABLE and TABLE_NAME == 'geoadmin-filestorage':
+            print 'Recreating table %s...' % TABLE_NAME
+            table = Table.create(TABLE_NAME, schema=[
+                HashKey('adminId'),
+            ], throughput={
+                'read': 1,
+                'write': 1
+            },
+            connection=connect_to_region('eu-west-1')
+            )
+            time.sleep(30)
+        elif CREATE_TABLE:
+            print "Unknown table %s. Cannot create..." % TABLE_NAME
+            sys.exit(2)
         else:
-            print 'Update existing table...'
+            print 'Update existing table %s ...' % TABLE_NAME
             table = Table(TABLE_NAME, connection=connect_to_region('eu-west-1'))
 
         map(write_data, files_names)
@@ -150,3 +186,11 @@ if __name__ == '__main__':
         tf = time.time()
         toff = tf - t0
         logger.info('It took: %s seconds' %toff)
+
+if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        print "No dump dir provided"
+        usage()
+        sys.exit(2)
+    main(sys.argv[1:])
+
