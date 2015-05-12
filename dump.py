@@ -100,9 +100,10 @@ def save_data(conn, table_name, dump_dir):
             f.close()
 
 def zip_dir(zipname, dir_to_zip, dump_dir):
+    print 'Zipping %s directory into %s' %(dir_to_zip, zipname)
     try:
         dir_to_zip_len = len(dir_to_zip.rstrip(os.sep)) + 1
-        with zipfile.ZipFile(dump_dir + zipname, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(dump_dir + '/' + zipname, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
             for dirname, subdirs, files in os.walk(dir_to_zip):
                 for filename in files:
                     path = os.path.join(dirname, filename)
@@ -134,7 +135,7 @@ def dump(table_name):
     t0 = time.time()
     folder_name = datetime.datetime.fromtimestamp(t0).strftime('%Y%m%d')
     dump_dir = os.path.join(BASE_DIR, table_name, folder_name)
-
+    print 'Dumping into %s' %dump_dir
 
     logger.info('Starting dump creation for table=%s...' % table_name)
 
@@ -160,6 +161,7 @@ def dump(table_name):
         save_schema(dump_dir, table_desc)
         save_data(conn, table_name, dump_dir)
         zip_dir(folder_name + '.zip', dump_dir, BASE_DIR + table_name)
+        print 'Manage retention in dir %s' %dump_dir
         shutil.rmtree(dump_dir)
         manage_retention(BASE_DIR + table_name)
     except Exception as e:
