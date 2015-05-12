@@ -4,6 +4,7 @@
 ## USAGE: venv/bin/python dump.py
 
 from boto.dynamodb import connect_to_region
+from boto.dynamodb.exceptions import DynamoDBResponseError
 import json
 import time
 import datetime
@@ -42,8 +43,11 @@ def save_data(conn, table_name, dump_dir):
     try:
         table = conn.get_table(table_name)
         if table.read_units != 20:
-            print 'Updating throughput'
-            table.update_throughput(20, 5)
+            try:
+                print 'Updating throughput'
+                table.update_throughput(20, 5)
+            except DynamoDBResponseError:
+                print 'Cannot updatetable throuput'
         maxAttempts = 6
         attempts = 0
         # Wait until throughtput is updated
@@ -94,8 +98,11 @@ def save_data(conn, table_name, dump_dir):
         raise e
     finally:
         if table and table.read_units != 10:
-            print 'Back to initial throughput'
-            table.update_throughput(10, 5)
+            try:
+                print 'Back to initial throughput'
+                table.update_throughput(10, 5)
+            except DynamoDBResponseError:
+                print "Cannot bring back to throuput"
         if f:
             f.close()
 
@@ -147,6 +154,7 @@ def dump(table_name):
         logger.info(e)
         logger.info('Removing directory...')
         shutil.rmtree(dump_dir)
+        sys.exit(2)
 
     try:
         conn = connect_to_region(region_name='eu-west-1')
@@ -180,9 +188,13 @@ def dump(table_name):
     logger.info('DUMP_STATUS=0')
 
 def usage():
-    print "Dump a dynamoDB table in 'eu-west-1' to local filesystem"
+    print "Dump a dynamoDB table in 'eu-west-1' to /var/backups/dynamodb"
     print ""
-    print "Usage: dump.py [-t table_name]"
+    print "Usage: dump.py [-h] [-t table_name]"
+    print ""
+    print "optional arguments:"
+    print "-h, --help               show this message and exit"
+    print "-t TABLE, --table=TABLE  dump table TABLE (default to 'shorturl')"
 
 def main(argv):
 

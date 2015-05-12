@@ -31,9 +31,9 @@ def user_yes_no_query(question):
             sys.stdout.write('Please respond with \'y\' or \'n\'.\n')
 
 
-def open_file_data(file_name):
+def open_file_data(path_data):
     try:
-        path_data = DUMP_DIR + '/' + file_name
+        #path_data = DUMP_DIR + '/' + file_name
         file_data = open(path_data, 'r')
     except IOError as e:
         print 'The following path doesn\'t exists: %s' %path_data
@@ -50,20 +50,30 @@ def create_batch_lists(table, chunk, TIMESTAMP):
         with table.batch_write() as batch_list:
             for row in chunk:
                 row_timestamp = row['timestamp'].split(' ')[0]
-                if len(row['url']) <= 2046:
-                    if TIMESTAMP is None or time.strptime(row_timestamp, '%Y-%m-%d') >= TIMESTAMP:
-                        batch_list.put_item(data={
-                            'url_short':  row['url_short'],
-                            'url':  row['url'],
-                            'timestamp': row['timestamp']
-                        }, overwrite=True)
+                if table.table_name == 'shorturl':
+                    if len(row['url']) <= 2046:
+                        if TIMESTAMP is None or time.strptime(row_timestamp, '%Y-%m-%d') >= TIMESTAMP:
+                            batch_list.put_item(data={
+                                'url_short':  row['url_short'],
+                                'url':  row['url'],
+                                'timestamp': row['timestamp']
+                            }, overwrite=True)
+                elif table.table_name == 'geoadmin-file-storage':
+                    if len(row['adminId']) <= 2046:
+                        if TIMESTAMP is None or time.strptime(row_timestamp, '%Y-%m-%d') >= TIMESTAMP:
+                            batch_list.put_item(data={
+                                'adminId':  row['adminId'],
+                                'fileId':  row['fileId'],
+                                'timestamp': row['timestamp']
+                            }, overwrite=True)
+
     except Exception as e:
         print e
         raise e
 
-def write_data(file_name, timestamp):
+def write_data(table, dump_dir, file_name, timestamp):
     try:
-        file_data = open_file_data(file_name)
+        file_data = open_file_data(os.path.join(dump_dir,file_name))
         data = json.load(file_data)
         # Load data as batches of 25 items (maximum value) and should not exceed 1Mb
         for chunk in split_data(data, 25):
@@ -78,10 +88,20 @@ def usage():
     print "This script a dumped dynamoBD to the given 'table' in 'eu-west-1'"
     print ""
     print "Usage: restore.py [-h --help] [-t --table=table_name] [-c --create] [-f --filter=20140805] dump_dir"
+    print
+    print "positional argument"
+    print "dump_dir                         name of the zip file, e.g. 20140805"
+    print
+    print "optional arguments"
+    print "-h, --help                       print this message and exits"
+    print "-t TABLE, --table=TABLE          TABLE to restore. Possible values are 'shortul' (default) and 'geoadmin-file-storage'"
+    print "-c, --create                     create TABLE before restoring data"
+    print "-f TIMESTAMP, --filter=TIMESTAMP filter records by TIMESTAMP (format 20140805)"
 
 def main(argv):
     table_name = 'shorturl'
     TIMESTAMP = None
+    create_table = False
 
     try:
         opts, args = getopt.getopt(argv, "hct:f:", ["help", "create", "table=", "filter="])
@@ -95,7 +115,7 @@ def main(argv):
         elif opt in ("-t", "--table"):
             table_name = arg
         elif opt in ("-c", "--create"):
-            CREATE_TABLE = False
+            create_table = True
         elif opt in ("-f", "--filter"):
             TIMESTAMP = arg
             if not TIMESTAMP.isdigit() and not len(TIMESTAMP) != 8:
@@ -105,37 +125,34 @@ def main(argv):
                 sys.exit(2)
             TIMESTAMP = time.strptime(TIMESTAMP, '%Y%m%d')
 
-    print opts, args
-
-    dirs = "".join(args)
-    if len(dirs) < 1:
+    directory = "".join(args)
+    if len(directory) < 1:
         print "No dump directory provided. Exiting"
         usage()
         sys.exit(2)
 
-    dump_dir = os.path.join('/var/backups/dynamodb/', dirs)
+    dump_dir = os.path.join('/var/backups/dynamodb/', table_name, directory)
 
 
     if user_yes_no_query('Do you really want to restore dump \'%s\' to table \'%s\'?' % (dump_dir, table_name)):
-        restore(table_name, dump_dir, TIMESTAMP)
+        restore(table_name, dump_dir, TIMESTAMP, create_table=create_table)
     else:
         sys.exit()
 
-def restore(table_name, dump_dir, timestamp):
+def restore(table_name, dump_dir, timestamp, create_table=False):
 
 
     t0 = time.time()
     logger = create_dynamo_logger('restore')
 
-    logger.info('Starting restore at:')
+    logger.info('Starting restore %s at:' % table_name )
     logger.info(time.strftime('%Y-%m-%d %X', time.localtime()))
     print 'Starting restore at:'
     print time.strftime('%Y-%m-%d %X', time.localtime())
 
-
     # Extract zipfile
     try:
-        os.mkdir(dump_dir)
+        os.makedirs(dump_dir)
     except OSError as e:
         print e
         logger.error('Can\'t create dump directory %s' % dump_dir)
@@ -159,7 +176,7 @@ def restore(table_name, dump_dir, timestamp):
 
     table = None
     try:
-        if CREATE_TABLE and table_name == 'shorturl':
+        if create_table and table_name == 'shorturl':
             print 'Recreating table %s...' % TABLE_NAME
             # Increase write capacity for faster restore
             table = Table.create(table_name, schema=[
@@ -179,28 +196,28 @@ def restore(table_name, dump_dir, timestamp):
             )
             ## Wait 30 secs for the table to create
             time.sleep(30)
-        elif CREATE_TABLE and table_name == 'geoadmin-filestorage':
+        elif create_table and table_name == 'geoadmin-file-storage':
             print 'Recreating table %s...' % table_name
             table = Table.create(table_name, schema=[
                 HashKey('adminId'),
             ], throughput={
-                'read': 1,
-                'write': 1
+                'read': 10,
+                'write': 5
             },
             connection=connect_to_region('eu-west-1')
             )
             time.sleep(30)
-        elif CREATE_TABLE:
+        elif create_table:
             print "Unknown table %s. Cannot create..." % table_name
             sys.exit(2)
         else:
             print 'Update existing table %s ...' % table_name
             table = Table(table_name, connection=connect_to_region('eu-west-1'))
 
-        [write_data(f, timestamp) for f in files_name]
+        [write_data(table, dump_dir, f, timestamp) for f in files_names]
     except Exception as e:
         print e
-        logger.error('An error occured during DB restoration')
+        logger.error('An error occured during table \'%s\' restoration' % table_name)
         logger.error(e)
         sys.exit(1)
     finally:
