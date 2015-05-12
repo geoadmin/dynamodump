@@ -61,13 +61,13 @@ def create_batch_lists(table, chunk, TIMESTAMP):
         print e
         raise e
 
-def write_data(file_name):
+def write_data(file_name, timestamp):
     try:
         file_data = open_file_data(file_name)
         data = json.load(file_data)
         # Load data as batches of 25 items (maximum value) and should not exceed 1Mb
         for chunk in split_data(data, 25):
-            create_batch_lists(table, chunk, TIMESTAMP)
+            create_batch_lists(table, chunk, timestamp)
     except Exception as e:
         print e
         raise e
@@ -81,6 +81,7 @@ def usage():
 
 def main(argv):
     table_name = 'shorturl'
+    TIMESTAMP = None
 
     try:
         opts, args = getopt.getopt(argv, "hct:f:", ["help", "create", "table=", "filter="])
@@ -104,6 +105,8 @@ def main(argv):
                 sys.exit(2)
             TIMESTAMP = time.strptime(TIMESTAMP, '%Y%m%d')
 
+    print opts, args
+
     dirs = "".join(args)
     if len(dirs) < 1:
         print "No dump directory provided. Exiting"
@@ -114,11 +117,11 @@ def main(argv):
 
 
     if user_yes_no_query('Do you really want to restore dump \'%s\' to table \'%s\'?' % (dump_dir, table_name)):
-        restore(table_name, dump_dir)
+        restore(table_name, dump_dir, TIMESTAMP)
     else:
         sys.exit()
 
-def restore(table_name, dump_dir):
+def restore(table_name, dump_dir, timestamp):
 
 
     t0 = time.time()
@@ -194,7 +197,7 @@ def restore(table_name, dump_dir):
             print 'Update existing table %s ...' % table_name
             table = Table(table_name, connection=connect_to_region('eu-west-1'))
 
-        map(write_data, files_names)
+        [write_data(f, timestamp) for f in files_name]
     except Exception as e:
         print e
         logger.error('An error occured during DB restoration')
@@ -207,5 +210,5 @@ def restore(table_name, dump_dir):
         logger.info('It took: %s seconds' %toff)
 
 if __name__ == '__main__':
-    main(sys.argv)
+    main(sys.argv[1:])
 
