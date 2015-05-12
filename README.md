@@ -11,37 +11,39 @@ CONFIGURATION
 
 Logs:
 
-    /var/log/dynamodb/
+    /var/log/dynamodb/<table name>
 
 Backups:
 
-    /var/backups/dynamodb/
+    /var/backups/dynamodb/<table name>
 
 
 DUMP DB USAGE
 -------------
 
-  venv/bin/python dump.py
+  $ venv/bin/python dump.py [-t table_name] 
 
-will create a folder which name is today's timestamp. (YYYYMMDD so for instance 20140805)
+will create a directory in /var/backups/dynamodb/<table name> which name is today's timestamp. (YYYYMMDD so for instance 20140805)
 This folder contains 2 types of files:
 
 schema.json : The description of the table
 data_{n}.json: The actual data represented as an array of object litterals
 
+The default table name is **shorturl**
+
 RESTORE DB USAGE
 ----------------
 
-    venv/bin/python restore.py {timestamp} {createtable} {restorefromtimestamp}
+    venv/bin/python restore.py [-h --help] [-t --table=table_name] [-c --create] [-f --filter=20140805] dump_dir
 
 Example:
 
-    venv/bin/python restore.py 20140918 true 20140917
+    venv/bin/python restore.py --create --table=geoadmin-file-storage --filter=20140918 /var/backups/dynamodb/geoadmin-file-storage/20140917
 
 
-    {timestamp} format: %Y%m%d (the associated compressed dump timestamp)
-    {createtable} values: true or false
-    {restorefromtimestamp} format: %Y%m%d
+    --filter         Format: %Y%m%d (the associated compressed dump timestamp)
+    --table          Table name. Default to 'shorturl'
+    --create         Create the table before inserting values.
 
 In order to commit in this repository
 -------------------------------------
