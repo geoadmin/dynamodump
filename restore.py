@@ -12,12 +12,23 @@ import time
 import zipfile
 import shutil
 import getopt
+from distutils.util import strtobool
 from log import create_dynamo_logger
 
 TIMESTAMP = None
 TABLE_NAME = 'shorturl'
 CREATE_TABLE = False
 JSON_INDENT = 2
+
+
+
+def user_yes_no_query(question):
+    sys.stdout.write('%s [y/n]\n' % question)
+    while True:
+        try:
+            return strtobool(raw_input().lower())
+        except ValueError:
+            sys.stdout.write('Please respond with \'y\' or \'n\'.\n')
 
 
 def open_file_data(file_name):
@@ -64,12 +75,12 @@ def write_data(file_name):
         file_data.close()
 
 def usage():
-    print "Restore a dumped dynamoBD to the given 'table' in 'eu-west-1'"
+    print "This script a dumped dynamoBD to the given 'table' in 'eu-west-1'"
     print ""
-    print "Usage: restore.py [-h --help] [-t --table=table_name] [-c --create] [-f --filter=20140805] table_name"
+    print "Usage: restore.py [-h --help] [-t --table=table_name] [-c --create] [-f --filter=20140805] dump_dir"
 
 def main(argv):
-    TABLE_NAME = 'shorturl'
+    table_name = 'shorturl'
 
     try:
         opts, args = getopt.getopt(argv, "hct:f:", ["help", "create", "table=", "filter="])
@@ -81,7 +92,7 @@ def main(argv):
             usage()
             sys.exit()
         elif opt in ("-t", "--table"):
-            TABLE_NAME = arg
+            table_name = arg
         elif opt in ("-c", "--create"):
             CREATE_TABLE = False
         elif opt in ("-f", "--filter"):
@@ -94,12 +105,20 @@ def main(argv):
             TIMESTAMP = time.strptime(TIMESTAMP, '%Y%m%d')
 
     dirs = "".join(args)
-    DUMP_DIR = os.path.join('/var/backups/dynamodb/', dirs)
+    if len(dirs) < 1:
+        print "No dump directory provided. Exiting"
+        usage()
+        sys.exit(2)
+
+    dump_dir = os.path.join('/var/backups/dynamodb/', dirs)
 
 
-    restore(TABLE_NAME, DUMP_DIR)
+    if user_yes_no_query('Do you really want to restore dump \'%s\' to table \'%s\'?' % (dump_dir, table_name)):
+        restore(table_name, dump_dir)
+    else:
+        sys.exit()
 
-def restore(TABLE_NAME, DUMP_DIR):
+def restore(table_name, dump_dir):
 
 
     t0 = time.time()
@@ -113,34 +132,34 @@ def restore(TABLE_NAME, DUMP_DIR):
 
     # Extract zipfile
     try:
-        os.mkdir(DUMP_DIR)
+        os.mkdir(dump_dir)
     except OSError as e:
         print e
-        logger.error('Can\'t create dump directory %s' %DUMP_DIR)
+        logger.error('Can\'t create dump directory %s' % dump_dir)
         logger.error(e)
         sys.exit(1)
     try:
-        fh = open(DUMP_DIR + '.zip', 'rb')
+        fh = open(dump_dir + '.zip', 'rb')
         zipf = zipfile.ZipFile(fh)
-        zipf.extractall(DUMP_DIR)
+        zipf.extractall(dump_dir)
         fh.close()
     except Exception as e:
         print e
-        logger.error('Can\'t extract file from %s.zip' %DUMP_DIR)
+        logger.error('Can\'t extract file from %s.zip' % dump_dir)
         logger.error(e)
         sys.exit(1)
 
     # Get data files
-    files_names = os.listdir(DUMP_DIR)
+    files_names = os.listdir(dump_dir)
     filter_data_files = lambda x: x.startswith('data_')
     files_names = filter(filter_data_files, files_names)
 
     table = None
     try:
-        if CREATE_TABLE and TABLE_NAME == 'shorturl':
+        if CREATE_TABLE and table_name == 'shorturl':
             print 'Recreating table %s...' % TABLE_NAME
             # Increase write capacity for faster restore
-            table = Table.create(TABLE_NAME, schema=[
+            table = Table.create(table_name, schema=[
                 HashKey('url_short'),
             ], throughput={
                 'read': 18,
@@ -157,9 +176,9 @@ def restore(TABLE_NAME, DUMP_DIR):
             )
             ## Wait 30 secs for the table to create
             time.sleep(30)
-        elif CREATE_TABLE and TABLE_NAME == 'geoadmin-filestorage':
-            print 'Recreating table %s...' % TABLE_NAME
-            table = Table.create(TABLE_NAME, schema=[
+        elif CREATE_TABLE and table_name == 'geoadmin-filestorage':
+            print 'Recreating table %s...' % table_name
+            table = Table.create(table_name, schema=[
                 HashKey('adminId'),
             ], throughput={
                 'read': 1,
@@ -169,11 +188,11 @@ def restore(TABLE_NAME, DUMP_DIR):
             )
             time.sleep(30)
         elif CREATE_TABLE:
-            print "Unknown table %s. Cannot create..." % TABLE_NAME
+            print "Unknown table %s. Cannot create..." % table_name
             sys.exit(2)
         else:
-            print 'Update existing table %s ...' % TABLE_NAME
-            table = Table(TABLE_NAME, connection=connect_to_region('eu-west-1'))
+            print 'Update existing table %s ...' % table_name
+            table = Table(table_name, connection=connect_to_region('eu-west-1'))
 
         map(write_data, files_names)
     except Exception as e:
@@ -182,15 +201,11 @@ def restore(TABLE_NAME, DUMP_DIR):
         logger.error(e)
         sys.exit(1)
     finally:
-        shutil.rmtree(DUMP_DIR)
+        shutil.rmtree(dump_dir)
         tf = time.time()
         toff = tf - t0
         logger.info('It took: %s seconds' %toff)
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print "No dump dir provided"
-        usage()
-        sys.exit(2)
-    main(sys.argv[1:])
+    main(sys.argv)
 
