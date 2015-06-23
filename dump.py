@@ -130,7 +130,7 @@ def manage_retention(dumpDir):
         raise e
 
     if len(dumps) > 0:
-        cleandumps = lambda x: os.remove(dumpDir + x)
+        cleandumps = lambda x: os.remove(os.path.join(dumpDir, x))
         # Remove lost and founds
         if dumps[len(dumps) - 1].startswith('lost'):
             dumps.pop(len(dumps) - 1)
