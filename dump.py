@@ -8,7 +8,7 @@ from boto.dynamodb.exceptions import DynamoDBResponseError
 import json
 import time
 import datetime
-import os 
+import os
 import sys
 import zipfile
 import shutil
@@ -20,10 +20,13 @@ PREFIX_NAME = 'data_'
 JSON_INDENT = 2
 
 DUMP_READ_THROUGHPUT = 60
-DUMP_WRITE_THROUGHPUT = 5 
+DUMP_WRITE_THROUGHPUT = 5
 
 BASE_READ_THROUGHPUT = 10
 BASE_WRITE_THROUGHPUT = 5
+
+# Set to False for debugging
+CHANGE_THROUGHPUT_FOR_BACKUP = True
 
 logger = create_dynamo_logger('dump')
 
@@ -48,7 +51,7 @@ def save_data(conn, table_name, dump_dir):
     counter = 0
     try:
         table = conn.get_table(table_name)
-        if table.read_units != DUMP_READ_THROUGHPUT:
+        if CHANGE_THROUGHPUT_FOR_BACKUP and table.read_units != DUMP_READ_THROUGHPUT:
             try:
                 print 'Updating throughput for dumping'
                 table.update_throughput(DUMP_READ_THROUGHPUT, DUMP_WRITE_THROUGHPUT)
@@ -103,7 +106,7 @@ def save_data(conn, table_name, dump_dir):
         logger.error('An error occured while writing the json files')
         raise e
     finally:
-        if table and table.read_units != BASE_READ_THROUGHPUT:
+        if CHANGE_THROUGHPUT_FOR_BACKUP and table and table.read_units != BASE_READ_THROUGHPUT:
             try:
                 print 'Back to initial throughput'
                 table.update_throughput(BASE_READ_THROUGHPUT, BASE_WRITE_THROUGHPUT)
@@ -113,7 +116,7 @@ def save_data(conn, table_name, dump_dir):
             f.close()
 
 def zip_dir(zipname, dir_to_zip, dump_dir):
-    print 'Zipping %s directory into %s' %(dir_to_zip, zipname)
+    logger.info('Zipping %s directory into %s' %(dir_to_zip, zipname))
     try:
         dir_to_zip_len = len(dir_to_zip.rstrip(os.sep)) + 1
         with zipfile.ZipFile(dump_dir + '/' + zipname, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
@@ -130,7 +133,7 @@ def manage_retention(dumpDir):
     # A maximum a 30 dumps
     MAX_RENTENTION = 30
     try:
-        dumps = os.listdir(dumpDir)
+        dumps = [f for f in os.listdir(dumpDir) if os.path.isfile(f)]
         dumps.sort()
     except OSError as e:
         raise e
@@ -148,16 +151,16 @@ def dump(table_name):
     t0 = time.time()
     folder_name = datetime.datetime.fromtimestamp(t0).strftime('%Y%m%d')
     dump_dir = os.path.join(BASE_DIR, table_name, folder_name)
-    print 'Dumping into %s' %dump_dir
 
     logger.info('Starting dump creation for table=%s...' % table_name)
+    logger.info('Dumping into %s' %dump_dir)
 
 
     try:
         os.makedirs(dump_dir)
     except OSError as e:
         print 'Error during dump creation: %s' %e
-        logger.info(e)
+        logger.error(e)
         logger.info('Removing directory...')
         shutil.rmtree(dump_dir)
         sys.exit(2)
@@ -177,7 +180,7 @@ def dump(table_name):
         zip_dir(folder_name + '.zip', dump_dir, BASE_DIR + table_name)
         print 'Manage retention in dir %s' %dump_dir
         shutil.rmtree(dump_dir)
-        manage_retention(BASE_DIR + table_name)
+        manage_retention(os.path.join(BASE_DIR, table_name))
     except Exception as e:
         tf = time.time()
         toff = tf - t0
@@ -205,17 +208,17 @@ def usage():
 def main(argv):
 
     TABLE_NAME = 'shorturl'
-    try:                                
+    try:
         opts, args = getopt.getopt(argv, "ht:", ["help", "table="])
-    except getopt.GetoptError:           
-        usage()                          
-        sys.exit(2) 
-    for opt, arg in opts:                
-        if opt in ("-h", "--help"):      
-            usage()                     
-            sys.exit()                  
-        elif opt in ("-t", "--table"): 
-            TABLE_NAME = arg               
+    except getopt.GetoptError:
+        usage()
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt in ("-h", "--help"):
+            usage()
+            sys.exit()
+        elif opt in ("-t", "--table"):
+            TABLE_NAME = arg
 
     dump(TABLE_NAME)
 
