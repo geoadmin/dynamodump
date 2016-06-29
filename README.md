@@ -14,8 +14,13 @@ Logs:
     /var/log/dynamodb/<table name>
 
 Backups:
+ 
 
     /var/backups/dynamodb/<table name>
+
+    or
+
+   /var/backups/dynamodb/<bucket name>
 
 
 DUMP DB USAGE
@@ -44,6 +49,23 @@ Example:
     --filter         Format: %Y%m%d (the associated compressed dump timestamp)
     --table          Table name. Default to 'shorturl'
     --create         Create the table before inserting values.
+
+
+DUMP S3 BUCKET
+--------------
+
+    venv/bin/python s3bucketdump.sh
+
+This will sync the s3 bucket 'public.geo.admin.ch' to /var/backups/dynamodb/public.geo.admin.ch. The S3 buckets 'public.int.bgdi.ch' and
+'public.dev.bgdi.ch' are not backuped. It is assumed that only KML files are present, as the 'Content-Type' are not saved.
+
+RESTORE S3 BUCKET
+--------------
+
+    venv/bin/python s3bucketrestore.sh
+
+As sync'ed files have no extension, mime-magic will not work and it is assumed that all files are 'application/vnd.google-earth.kml+xml'.
+
 
 In order to commit in this repository
 -------------------------------------
