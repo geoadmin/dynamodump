@@ -19,6 +19,12 @@ BASE_DIR = '/var/backups/dynamodb/'
 PREFIX_NAME = 'data_'
 JSON_INDENT = 2
 
+DUMP_READ_THROUGHPUT = 60
+DUMP_WRITE_THROUGHPUT = 5 
+
+BASE_READ_THROUGHPUT = 10
+BASE_WRITE_THROUGHPUT = 5
+
 logger = create_dynamo_logger('dump')
 
 
@@ -42,12 +48,12 @@ def save_data(conn, table_name, dump_dir):
     counter = 0
     try:
         table = conn.get_table(table_name)
-        if table.read_units != 20:
+        if table.read_units != DUMP_READ_THROUGHPUT:
             try:
-                print 'Updating throughput'
-                table.update_throughput(20, 5)
+                print 'Updating throughput for dumping'
+                table.update_throughput(DUMP_READ_THROUGHPUT, DUMP_WRITE_THROUGHPUT)
             except DynamoDBResponseError:
-                print 'Cannot updatetable throuput'
+                print 'Cannot update table throuput'
         maxAttempts = 6
         attempts = 0
         # Wait until throughtput is updated
@@ -97,10 +103,10 @@ def save_data(conn, table_name, dump_dir):
         logger.error('An error occured while writing the json files')
         raise e
     finally:
-        if table and table.read_units != 10:
+        if table and table.read_units != BASE_READ_THROUGHPUT:
             try:
                 print 'Back to initial throughput'
-                table.update_throughput(10, 5)
+                table.update_throughput(BASE_READ_THROUGHPUT, BASE_WRITE_THROUGHPUT)
             except DynamoDBResponseError:
                 print "Cannot bring back to throuput"
         if f:
