@@ -14,19 +14,19 @@ Logs:
     /var/log/dynamodb/<table name>
 
 Backups:
- 
+
 
     /var/backups/dynamodb/<table name>
 
     or
 
-   /var/backups/dynamodb/<bucket name>
+    /var/backups/dynamodb/<bucket name>
 
 
 DUMP DB USAGE
 -------------
 
-  $ venv/bin/python dump.py [-t table_name] 
+  $ venv/bin/python dump.py [-t table_name]
 
 will create a directory in /var/backups/dynamodb/<table name> which name is today's timestamp. (YYYYMMDD so for instance 20140805)
 This folder contains 2 types of files:
@@ -66,6 +66,12 @@ RESTORE S3 BUCKET
 
 As sync'ed files have no extension, mime-magic will not work and it is assumed that all files are 'application/vnd.google-earth.kml+xml'.
 
+MANAGE BACKUP
+-------------
+
+Manually delete backup older than 30 days. If `--table` is not specified, `shorturl`will be used.
+
+    $   venv/bin/python dump.py ---delete --table geoadmin-file-storage
 
 In order to commit in this repository
 -------------------------------------

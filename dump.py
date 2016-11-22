@@ -133,7 +133,7 @@ def manage_retention(dumpDir):
     # A maximum a 30 dumps
     MAX_RENTENTION = 30
     try:
-        dumps = [f for f in os.listdir(dumpDir) if os.path.isfile(f)]
+        dumps = [f for f in os.listdir(dumpDir) if f.endswith('.zip')]
         dumps.sort()
     except OSError as e:
         raise e
@@ -204,12 +204,14 @@ def usage():
     print "optional arguments:"
     print "-h, --help               show this message and exit"
     print "-t TABLE, --table=TABLE  dump table TABLE (default to 'shorturl')"
+    print "-d, --delete             delete old backups"
 
 def main(argv):
 
     TABLE_NAME = 'shorturl'
+    DELETE = False
     try:
-        opts, args = getopt.getopt(argv, "ht:", ["help", "table="])
+        opts, args = getopt.getopt(argv, "hdt:", ["help", "delete", "table="])
     except getopt.GetoptError:
         usage()
         sys.exit(2)
@@ -217,10 +219,14 @@ def main(argv):
         if opt in ("-h", "--help"):
             usage()
             sys.exit()
+        elif opt in ("-d", "--delete"):
+            DELETE = True
         elif opt in ("-t", "--table"):
             TABLE_NAME = arg
-
-    dump(TABLE_NAME)
+    if DELETE:
+        manage_retention(os.path.join(BASE_DIR, TABLE_NAME))
+    else:
+        dump(TABLE_NAME)
 
 if __name__ == '__main__':
     main(sys.argv[1:])
